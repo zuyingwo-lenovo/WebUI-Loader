@@ -1,0 +1,48 @@
+﻿<Window x:Class="WebUI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        xmlns:local="clr-namespace:WebUI"
+        mc:Ignorable="d"
+        Title=" " Height="240" Width="1420"
+        
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="20" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Grid Grid.Column="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Background="#FF2D2D30" MouseDown="DragBar_MouseDown" />
+
+            <TextBlock Grid.Row="0" Text=" " Foreground="White" 
+                       VerticalAlignment="Center" HorizontalAlignment="Left" Margin="0,0,0,0"
+                       IsHitTestVisible="False" />
+
+            <Button x:Name="CloseButton" 
+                    Grid.Row="1" 
+                    Content="X" 
+                    Click="CloseButton_Click"
+                    Height="30"
+                    Background="#FF505050" 
+                    Foreground="White" 
+                    BorderThickness="0"
+                    FontWeight="Bold" />
+        </Grid>
+
+        <wv2:WebView2 x:Name="myWebView" Grid.Column="1"/>
+
+    </Grid>
+</Window>

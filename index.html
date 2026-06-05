@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<!-- [変更] 言語を 'ja' から 'en' に変更 -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- [変更] タイトルを英語に変更 -->
+    <title>Meeting Intent Detection Dashboard (API Ver.)</title>
+    <!-- Tailwind CSS CDN --><script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN --><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* (スタイルは変更ありません) */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+        body {
+            /* [変更] 'Noto Sans JP' を削除 */
+            font-family: 'Inter', sans-serif;
+            display: grid;
+            place-items: center;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+        }
+        .log-container::-webkit-scrollbar { width: 4px; }
+        .log-container::-webkit-scrollbar-thumb { background-color: #4B5563; border-radius: 20px; }
+        .log-container::-webkit-scrollbar-track { background-color: #1F2937; }
+        .summary-modal {
+            font-family: 'VT323', 'Courier New', monospace;
+            background-color: #0d0d1a;
+            color: #00f0c0;
+            border: 4px solid #00f0c0;
+            box-shadow: 0 0 20px #00f0c0;
+        }
+        .summary-modal-header { border-bottom: 2px solid #00f0c0; }
+        .summary-modal-content { border: 2px solid #00f0c0; }
+        .summary-modal-content::-webkit-scrollbar { width: 8px; }
+        .summary-modal-content::-webkit-scrollbar-thumb { background-color: #00f0c0; border: 2px solid #0d0d1a; }
+        .summary-modal-content::-webkit-scrollbar-track { background-color: #1a1a3a; }
+        .summary-modal-content .highlight { color: #f0f000; }
+        .summary-modal-content .highlight-red { color: #ff4141; }
+        .summary-modal-button { border: 2px solid #00f0c0; background-color: #1a1a3a; }
+        .summary-modal-button:hover { background-color: #00f0c0; color: #0d0d1a; }
+    </style>
+</head>
+<body class="bg-gray-800">
+
+<!--
+  ダッシュボードコンテナ
+--><div class="w-[1400px] h-[230px] bg-gray-900 text-white rounded-lg shadow-2xl overflow-hidden flex font-sans">
+
+    <!--
+      セクション1: Intent種類 (円グラフ) & 役職設定
+    --><div class="flex-shrink-0 w-[240px] h-full p-4 flex flex-col justify-between border-r border-gray-700 relative">
+
+    <!-- 円グラフエリア --><div>
+    <!-- [変更] 見出しを英語に変更 -->
+    <h3 class="text-sm font-medium text-gray-300 mb-2">Intent Ratio (Overall)</h3>
+    <div class="w-full h-[150px] relative"><canvas id="intentPieChart"></canvas>
+    </div>
+</div>
+
+    <!-- 役職設定エリア --><div class="relative">
+    <!-- 役職設定ドロップダウン (非表示状態) --><div id="roleMenu" class="absolute bottom-10 left-0 w-full bg-gray-800 border border-gray-700 rounded-md shadow-lg z-10 hidden">
+    <!-- プリセット役職 -->
+    <!-- [変更] 役職名を英語に変更 -->
+    <div class="py-1">
+        <a href="#" class="role-option block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700" data-role="Manager">Manager</a>
+        <a href="#" class="role-option block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700" data-role="Developer">Developer</a>
+        <a href="#" class="role-option block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700" data-role="Sales">Sales</a>
+    </div>
+
+    <!-- カスタム役職入力エリア -->
+    <div class="border-t border-gray-700"></div>
+    <div class="p-2 flex space-x-2">
+        <!-- [変更] プレースホルダーを英語に変更 -->
+        <input type="text" id="customRoleInput" class="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Custom Role...">
+        <!-- [変更] ボタンテキストを英語に変更 -->
+        <button id="customRoleButton" class="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 focus:outline-none flex-shrink-0">Set</button>
+    </div>
+</div>
+
+
+    <!-- アイコンボタンエリア --><div class="flex items-center justify-between">
+    <!-- [変更] title属性を英語に変更 -->
+    <!-- 設定ボタン --><button id="roleMenuButton" title="Role Settings" class="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:bg-gray-700 hover:text-white transition-colors">
+    <svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="32" height="32" viewBox="0 0 32 32">
+        <path fill="silver" d="M11.366 22.564l1.291-1.807-1.414-1.414-1.807 1.291c-0.335-0.187-0.694-0.337-1.071-0.444l-0.365-2.19h-2l-0.365 2.19c-0.377 0.107-0.736 0.256-1.071 0.444l-1.807-1.291-1.414 1.414 1.291 1.807c-0.187 0.335-0.337 0.694-0.443 1.071l-2.19 0.365v2l2.19 0.365c0.107 0.377 0.256 0.736 0.444 1.071l-1.291 1.807 1.414 1.414 1.807-1.291c0.335 0.187 0.694 0.337 1.071 0.444l0.365 2.19h2l0.365-2.19c0.377-0.107 0.736 0.256 1.071-0.444l1.807 1.291 1.414-1.414-1.291-1.807c0.187-0.335 0.337-0.694 0.444-1.071l2.19-0.365v-2l-2.19-0.365c-0.107-0.377-0.256-0.736-0.444-1.071zM7 27c-1.105 0-2-0.895-2-2s0.895-2 2-2 2 0.895 2 2-0.895 2-2 2zM32 12v-2l-2.106-0.383c-0.039-0.251-0.088-0.499-0.148-0.743l1.799-1.159-0.765-1.848-2.092 0.452c-0.132-0.216-0.273-0.426-0.422-0.629l1.219-1.761-1.414-1.414-1.761 1.219c-0.203-0.149-0.413-0.29-0.629-0.422l0.452-2.092-1.848-0.765-1.159 1.799c-0.244-0.059-0.492-0.109-0.743-0.148l-0.383-2.106h-2l-0.383 2.106c-0.251 0.039-0.499 0.088-0.743 0.148l-1.159-1.799-1.848 0.765 0.452 2.092c-0.216 0.132-0.426 0.273-0.629 0.422l-1.761-1.219-1.414 1.414 1.219 1.761c-0.149 0.203-0.29 0.413-0.422-0.629l-2.092-0.452-0.765 1.848 1.799 1.159c-0.059 0.244-0.109 0.492-0.148 0.743l-2.106 0.383v2l2.106 0.383c0.039 0.251 0.088 0.499 0.148 0.743l-1.799 1.159 0.765 1.848 2.092-0.452c0.132 0.216 0.273 0.426 0.422 0.629l-1.219 1.761 1.414 1.414 1.761-1.219c0.203 0.149 0.413 0.29 0.629 0.422l-0.452 2.092 1.848 0.765 1.159-1.799c0.244 0.059 0.492 0.109 0.743 0.148l0.383 2.106h2l0.383-2.106c0.251-0.039 0.499-0.088 0.743-0.148l1.159 1.799 1.848-0.765-0.452-2.092c0.216-0.132 0.426 0.273 0.629-0.422l1.761 1.219 1.414-1.414-1.219-1.761c0.149-0.203 0.29-0.413 0.422-0.629l2.092 0.452 0.765-1.848-1.799-1.159c0.059-0.244-0.109 0.492 0.148-0.743l2.106-0.383zM21 15.35c-2.402 0-4.35-1.948-4.35-4.35s1.948-4.35 4.35-4.35 4.35 1.948 4.35 4.35c0 2.402-1.948 4.35-4.35 4.35z"/>
+    </svg>
+</button>
+
+    <!-- 保存ボタン --><button id="saveButton" title="Save Log" class="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:bg-gray-700 hover:text-white transition-colors">
+    <svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+        <path fill="silver" d="M26 2h-20l-6 6v21c0 0.552 0.448 1 1 1h30c0.552 0 1-0.448 1-1v-21l-6-6zM16 26l-10-8h6v-6h8v6h6l-10 8zM4.828 6l2-2h18.343l2 2h-22.343z"></path>
+    </svg>
+</button>
+
+    <!-- 開始/停止ボタン --><button id="startButton" title="Start Detection" class="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:bg-gray-700 hover:text-white transition-colors">
+    <!-- Play Icon (default) -->
+    <svg id="playIcon" xmlns="http://www.w3.org/2000/svg" version="1.1" width="32" height="32" viewBox="0 0 32 32">
+        <path clip-rule="evenodd" fill-rule="evenodd" fill="silver" d="M32 12h-12l4.485-4.485c-2.267-2.266-5.28-3.515-8.485-3.515s-6.219 1.248-8.485 3.515c-2.266 2.267-3.515 5.28-3.515 8.485s1.248 6.219 3.515 8.485c2.267 2.266 5.28 3.515 8.485 3.515s6.219-1.248 8.485-3.515c0.189-0.189 0.371-0.384 0.546-0.583l3.010 2.634c-2.933 3.349-7.239 5.464-12.041 5.464-8.837 0-16-7.163-16-16s7.163-16 16-16c4.418 0 8.418 1.791 11.313 4.687l4.687-4.687v12z"/>
+    </svg>
+    <!-- Pause Icon (hidden) -->
+    <svg id="pauseIcon" class="hidden" xmlns="http://www.w3.org/2000/svg" version="1.1" width="32" height="32" viewBox="0 0 32 32"> <!-- class="hidden" を追加 -->
+        <path clip-rule="evenodd" fill-rule="evenodd" fill="silver" d="M16 0c-8.837 0-16 7.163-16 16s7.163 16 16 16 16-7.163 16-16-7.163-16-16-16zM16 29c-7.18 0-13-5.82-13-13s5.82-13 13-13 13 5.82 13 13-5.82 13-13 13zM10 10h12v12h-12z"/>
+    </svg>
+</button>
+</div>
+</div>
+</div>
+
+    <!--
+      セクション2: ライブイベントログ (会議シナリオ)
+    --><div class="flex-grow h-full p-4 flex flex-col overflow-hidden">
+
+    <!-- ヘッダー --><div class="flex-shrink-0 mb-3">
+    <div class="flex justify-between items-center">
+        <!-- [変更] 見出しを英語に変更 -->
+        <h3 class="text-lg font-semibold text-gray-100">
+            Live Intent Log (for <span id="logHeaderRole">Manager</span>)
+        </h3>
+        <!-- [変更] ボタンテキストを英語に変更 -->
+        <button id="summaryButton" class="text-xs px-3 py-1 bg-blue-600 rounded-md hover:bg-blue-700 transition-colors">
+            Show Summary
+        </button>
+    </div>
+</div>
+
+    <!-- ログコンテナ (スクロール可能) --><div id="logContainer" class="flex-grow overflow-y-auto log-container pr-2 space-y-3">
+    <!-- Logs will be dynamically inserted here by JavaScript --></div>
+</div>
+
+</div>
+
+<!--
+  サマリ表示モーダル
+-->
+<div id="summaryModal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+    <!-- [変更] w-full max-w-2xl h-[90vh] -> w-[1400px] h-[230px] に変更 -->
+    <div class="summary-modal w-[1400px] h-[230px] p-4 flex flex-col">
+
+        <!-- ヘッダー -->
+        <div class="summary-modal-header pb-2 mb-2 text-2xl">
+            <h1>AI MEETING REMINDER</h1>
+            <p class="text-lg">Subject: Project review / Role: <span id="summaryRole" class="text-yellow-300">N/A</span></p>
+        </div>
+
+        <!-- アジェンダ -->
+        <div class="summary-modal-content p-2 mb-2 text-lg">
+            <ul>
+                <li>* Status</li>
+                <li>* Risk assessment</li>
+                <li>* Next action</li>
+                <li>* Q&A</li>
+            </ul>
+        </div>
+
+        <!-- コンテンツ (スクロール) -->
+        <div id="summaryContentContainer" class="summary-modal-content p-2 flex-grow overflow-y-auto text-lg log-container">
+            <!-- Summary content will be dynamically inserted here by JavaScript -->
+        </div>
+
+        <!-- フッターボタン -->
+        <div class="pt-2 mt-2 flex justify-end">
+            <!-- (CLOSEは元から英語) -->
+            <button id="summaryCloseButton" class="summary-modal-button text-2xl px-6 py-1">
+                CLOSE
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    // --- API Setting ---
+    const API_BASE_URL = 'http://127.0.0.1:5151'; // Flask server address
+
+    // --- Global Variables ---
+    let pieChart;
+    let restApiInterval = null;
+    let currentSessionId = null; // Session ID from API
+    let currentRole; // Role from API
+    // [変更] プリセット役職を英語に変更
+    const presetRoles = ['Manager', 'Developer', 'Sales'];
+
+    // --- IndexedDB code removed ---
+
+    // --- Demo Data ---
+
+    // allLogData starts empty and is built from API data
+    let allLogData = [];
+
+    // [変更] デモデータを英語に変更
+    // Seed data to add if API LogPool is empty
+    const demoLogPoolSeed = [
+        { role: 'Developer', author: 'Participant B', message: 'Mentioned "Potential delay"' },
+        { role: 'Sales', author: 'Participant D', message: 'Shared "Customer feedback"' },
+        { role: 'Developer', author: 'Participant C', message: 'Agreed on "Specification change"' },
+        { role: 'Manager', author: 'Participant B', message: 'Requested "Additional resources"' }
+    ];
+
+    // [変更] デモサマリを英語に変更
+    // This HTML will be fetched from Flask API /api/summaries/projectReview
+    // If the API has a simple version, this HTML will overwrite it
+    const demoSummaryContent = `
+        <p>&lt;ISSUE&gt;</p>
+        <p class="highlight">NDF</p>
+        <p>accounts for almost half of FA samples.</p>
+        <p>Among <span class="highlight-red">QDTS Case</span>, many are <span class="highlight-red">Customer managed</span> at <span class="highlight-red">CID</span>.</p>
+        <p>As a result, customer has concerns about <span class="highlight">KBD</span> quality (incl. analysis capability).</p>
+        <br>
+        <p>&lt;COUNTERMEASURE&gt;</p>
+        <p>Create <span class="highlight">Recreation guidance</span> and distribute to <span class="highlight">L2/COE/Supplier</span></p>
+        <p>to improve reproducibility.</p>
+        <p>Not only use <span class="highlight">Machine</span>, but also provide JIGs to make reproduction easier.</p>
+        <p>Cooperate with <span class="highlight">HWPA</span> to improve test procedures.</p>
+        <p>Streamline <span class="highlight">Flow</span> from <span class="highlight">Issue finding</span> at <span class="highlight">Customer</span> to FA at <span class="highlight">Dev.</span></p>
+        <p>Clarify roles at each step. Be careful not to make <span class="highlight-red">TAT</span> too long.</p>
+        <br>
+        <p>&lt;ISSUE&gt;</p>
+        <p>Cannot verify effect of <span class="highlight">EC</span> on actual machine because we don't know</p>
+        <p>how to turn <span class="highlight-red">Good sample</span> into <span class="highlight-red">defect sample</span>.</p>
+        <p>Therefore, risk of recurrence remains.</p>
+    `;
+
+    // (icons, colors are unchanged)
+    const icons = {
+        warning: `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>`,
+        success: `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>`,
+        info: `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`
+    };
+    const colors = {
+        warning: { bg: 'bg-amber-500', text: 'text-amber-400' },
+        success: { bg: 'bg-emerald-500', text: 'text-gray-200' },
+        info: { bg: 'bg-blue-500', text: 'text-gray-200' }
+    };
+
+    // --- DOM Element Retrieval ---
+    const logContainer = document.getElementById('logContainer');
+    const roleMenuButton = document.getElementById('roleMenuButton');
+    const roleMenu = document.getElementById('roleMenu');
+    const logHeaderRole = document.getElementById('logHeaderRole');
+    const roleOptions = document.querySelectorAll('.role-option');
+    const saveButton = document.getElementById('saveButton');
+    const startButton = document.getElementById('startButton');
+    const playIcon = document.getElementById('playIcon');
+    const pauseIcon = document.getElementById('pauseIcon');
+    const customRoleInput = document.getElementById('customRoleInput');
+    const customRoleButton = document.getElementById('customRoleButton');
+    const summaryButton = document.getElementById('summaryButton');
+    const summaryModal = document.getElementById('summaryModal');
+    const summaryCloseButton = document.getElementById('summaryCloseButton');
+    const summaryRole = document.getElementById('summaryRole');
+    const summaryContentContainer = document.getElementById('summaryContentContainer');
+
+
+    // --- API Helper ---
+    /**
+     * Wrapper for sending fetch requests to the API
+     * @param {string} endpoint - Path after /api/
+     * @param {RequestInit} options - fetch options
+     */
+    async function apiFetch(endpoint, options = {}) {
+        const url = `${API_BASE_URL}${endpoint}`;
+        try {
+            const response = await fetch(url, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers,
+                },
+                ...options,
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`API Error ${response.status}: ${errorText}`);
+            }
+            if (response.status === 204) {
+                return null;
+            }
+            return await response.json();
+        } catch (error) {
+            console.error(`Fetch error for ${url}:`, error);
+            // [変更] エラーメッセージを英語に変更
+            logHeaderRole.textContent = "API Connection Error";
+            throw error;
+        }
+    }
+
+
+    // --- Application Initialization ---
+
+    /**
+     * Initialize database and session
+     */
+    async function initializeApp() {
+        try {
+            // 1. Create a new session
+            const sessionData = await apiFetch('/api/sessions', { method: 'POST' });
+            currentSessionId = sessionData.id;
+            console.log(`New session created: ${currentSessionId}`);
+
+            // 2. Load role setting from API
+            const roleData = await apiFetch('/api/settings/currentRole');
+
+            if (roleData && roleData.value) {
+                if (typeof roleData.value === 'object' && roleData.value !== null && 'value' in roleData.value) {
+                    currentRole = roleData.value.value;
+                } else if (typeof roleData.value === 'string') {
+                    currentRole = roleData.value;
+                } else {
+                    currentRole = presetRoles[0]; // Manager
+                }
+            } else {
+                currentRole = presetRoles[0]; // Fallback
+                console.warn('Could not fetch role, defaulting to Manager.');
+                await setRole(currentRole);
+            }
+            logHeaderRole.textContent = currentRole;
+
+            // 3. Check API summary data and overwrite if necessary
+            await checkAndSeedSummary();
+
+            // 4. Seed LogPool if empty
+            await checkAndSeedLogPool();
+
+            // 5. Initial render of the app UI
+            renderLogs(currentRole); // allLogData is still empty
+            initializeChart(); // Draw initial chart
+
+        } catch (error) {
+            console.error('Failed to initialize app:', error);
+            // [変更] エラーメッセージを英語に変更
+            logHeaderRole.textContent = "Init Failed";
+        }
+    }
+
+    /**
+     * Overwrite API summary data with rich HTML if it's the simple version
+     */
+    async function checkAndSeedSummary() {
+        try {
+            const summaryData = await apiFetch('/api/summaries/projectReview');
+            // Check if it's the default simple HTML from Flask API
+            if (summaryData.html.includes("<h3>Project Review (Demo)</h3>")) {
+                console.log('Default summary found. Uploading rich HTML summary...');
+                await apiFetch('/api/summaries/projectReview', {
+                    method: 'PUT',
+                    body: JSON.stringify({ html: demoSummaryContent })
+                });
+                console.log('Rich HTML summary uploaded.');
+            } else {
+                console.log('Rich summary already exists in API.');
+            }
+        } catch (error) {
+            console.error('Failed to check/seed summary:', error);
+        }
+    }
+
+    /**
+     * Seed API LogPool with demo data if it's empty
+     */
+    async function checkAndSeedLogPool() {
+        try {
+            const poolData = await apiFetch('/api/logPool?limit=1');
+            if (poolData && poolData.meta && poolData.meta.total === 0) {
+                console.log('LogPool is empty. Seeding with demo data...');
+                await apiFetch('/api/logPool', {
+                    method: 'POST',
+                    body: JSON.stringify({ logs: demoLogPoolSeed })
+                });
+                console.log('LogPool seeded successfully.');
+            } else {
+                console.log('LogPool already has data.');
+            }
+        } catch (error) {
+            console.error('Failed to check/seed LogPool:', error);
+        }
+    }
+
+
+    // --- Function Definitions ---
+
+    /**
+     * Set the role and update UI and API
+     * @param {string} roleName - Role name to set
+     */
+    async function setRole(roleName) {
+        if (!roleName || roleName.trim() === '') return;
+
+        // 1. Update state
+        currentRole = roleName;
+
+        // 2. Save role setting to API
+        try {
+            await apiFetch('/api/settings/currentRole', {
+                method: 'PUT',
+                body: JSON.stringify({ value: currentRole })
+            });
+            console.log(`Saved role to API: ${currentRole}`);
+        } catch (error) {
+            console.error('Failed to save role to API:', error);
+        }
+
+        // 3. Update UI
+        logHeaderRole.textContent = roleName;
+        roleMenu.classList.add('hidden');
+        renderLogs(currentRole);
+
+        // 4. Clear input field
+        if (customRoleInput) {
+            customRoleInput.value = '';
+        }
+    }
+
+    /**
+     * Render logs
+     * @param {string} role - Role to filter by
+     */
+    function renderLogs(role) {
+        logContainer.innerHTML = '';
+        const isPresetRole = presetRoles.includes(role);
+
+        const filteredLogs = isPresetRole
+            ? allLogData.filter(log => log.roles.includes(role))
+            : allLogData;
+
+        filteredLogs.forEach(log => {
+            const color = colors[log.type] || colors.info;
+            const iconSvg = icons[log.icon] || icons.info;
+
+            const logEntry = `
+                    <li class="flex items-start space-x-3">
+                        <div class="flex-shrink-0 w-6 h-6 rounded-full ${color.bg} text-white flex items-center justify-center mt-0.5">
+                            ${iconSvg}
+                        </div>
+                        <div class="flex-grow">
+                            <p class="text-sm font-medium ${color.text}">${log.title}</p>
+                            <p class="text-xs text-gray-400">${log.details}</p>
+                        </div>
+                        <span class="flex-shrink-0 text-xs text-gray-500">${log.time}</span>
+                    </li>
+                `;
+            logContainer.insertAdjacentHTML('beforeend', logEntry);
+        });
+
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    /**
+     * Update pie chart data
+     */
+    function updatePieChart() {
+        if (!pieChart) return;
+
+        // [変更] ラベルを英語に変更
+        const counts = {
+            'Action Item': allLogData.filter(l => l.type === 'info').length,
+            'Concern/Q': allLogData.filter(l => l.type === 'warning').length,
+            'Agreement': allLogData.filter(l => l.type === 'success').length,
+            'Topic Change': allLogData.filter(l => !['info', 'warning', 'success'].includes(l.type)).length
+        };
+
+        pieChart.data.datasets[0].data = [
+            counts['Action Item'],
+            counts['Concern/Q'],
+            counts['Agreement'],
+            counts['Topic Change']
+        ];
+
+        pieChart.update();
+    }
+
+    /**
+     * Simulate fetching data from RestAPI
+     */
+    async function fetchRestApiData() {
+        let apiLog;
+        try {
+            // Hit Flask API /api/logPool/nextOldest
+            const response = await apiFetch('/api/logPool/nextOldest');
+            if (!response || !response.data) {
+                console.warn("No log received from API.");
+                return;
+            }
+            apiLog = response.data;
+        } catch (error) {
+            console.error("Failed to fetch from API, stopping simulation.", error);
+            stopSimulation(); // Stop simulation on error
+            return;
+        }
+
+        // [変更] ログ変換ロジックを英語基準に変更
+        // Convert API data (Flask Model) to Dashboard format
+        // Flask Model: { "role": "...", "message": "...", "author": "..." }
+        // Dashboard:   { "type": "info", "title": "...", "details": "...", "roles": ["..."] }
+
+        // Temporary logic: determine type and icon based on role
+        let logType = 'info'; // 'Developer' (or other)
+        if (apiLog.role === 'Manager') logType = 'warning';
+        if (apiLog.role === 'Sales') logType = 'success';
+
+        const newLog = {
+            type: apiLog.type,
+            icon: logType,
+            title: apiLog.message, // message to title
+            // [変更] '発言者:' -> 'Speaker: ', '(発言者不明)' -> '(Unknown Speaker)'
+            details: apiLog.author ? `Speaker: ${apiLog.author}` : '(Unknown Speaker)', // author to details
+            // [変更] ロケールを 'ja-JP' -> 'en-US'
+            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            roles: [apiLog.role] // API role to dashboard roles array
+        };
+
+        allLogData.push(newLog);
+        renderLogs(currentRole);
+        updatePieChart(); // This updates the pie chart
+    }
+
+
+    // --- Chart.js ---
+
+    /**
+     * Initialize the chart
+     */
+    function initializeChart() {
+        Chart.defaults.color = '#9CA3AF';
+        Chart.defaults.font.family = 'Inter, sans-serif';
+
+        const pieCtx = document.getElementById('intentPieChart').getContext('2d');
+        pieChart = new Chart(pieCtx, {
+            type: 'doughnut',
+            data: {
+                // [変更] ラベルを英語に変更
+                labels: ['Action Item', 'Concern/Q', 'Agreement', 'Topic Change'],
+                datasets: [{
+                    data: [ 0, 0, 0, 0 ], // Initial data is 0
+                    backgroundColor: [
+                        '#3B82F6', // blue-500 (Action)
+                        '#F59E0B', // amber-500 (Concern)
+                        '#10B981', // emerald-500 (Agreement)
+                        '#9333EA', // purple-600 (Other/Change)
+                    ],
+                    borderColor: '#1F2937',
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '60%',
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        align: 'center',
+                        labels: {
+                            color: '#D1D5DB',
+                            boxWidth: 10,
+                            padding: 8,
+                            font: {
+                                size: 10
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: '#374151',
+                        titleColor: '#FFFFFF',
+                        bodyColor: '#FFFFFF',
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Stop the simulation
+     */
+    function stopSimulation() {
+        playIcon.classList.remove('hidden');
+        pauseIcon.classList.add('hidden');
+        // [変更] titleを英語に変更
+        startButton.title = "Start Detection";
+        console.log('Detection stopped (RestAPI simulation).');
+        clearInterval(restApiInterval);
+        isRunning = false;
+    }
+
+    // --- Event Listeners ---
+
+    // (Role menu, custom role unchanged)
+    roleMenuButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        roleMenu.classList.toggle('hidden');
+    });
+    roleOptions.forEach(option => {
+        option.addEventListener('click', (e) => {
+            e.preventDefault();
+            const selectedRole = e.target.dataset.role;
+            setRole(selectedRole);
+        });
+    });
+    customRoleButton.addEventListener('click', () => {
+        const customRole = customRoleInput.value.trim();
+        setRole(customRole);
+    });
+    customRoleInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            const customRole = customRoleInput.value.trim();
+            setRole(customRole);
+        }
+    });
+    roleMenu.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+
+    // Save Button (API)
+    saveButton.addEventListener('click', async () => {
+        if (!currentSessionId) {
+            console.error('Session ID not initialized. Cannot save logs.');
+            return;
+        }
+
+        console.log(`Saving ${allLogData.length} logs for session ${currentSessionId} to API...`);
+
+        try {
+            // Convert dashboard format (allLogData) to API format (SavedLog)
+            const logsToSave = allLogData.map(log => ({
+                session_id: currentSessionId,
+                role: log.type, // Save 'info', 'warning' etc. as role
+                message: log.title,
+                author: log.details, // Save 'Speaker: ...' etc. as author
+                created_at: new Date().toISOString()
+            }));
+
+            // Hit /api/savedLogs/bulk
+            await apiFetch('/api/savedLogs/bulk', {
+                method: 'POST',
+                body: JSON.stringify({ logs: logsToSave })
+            });
+
+            console.log('Logs saved successfully to API.');
+
+            saveButton.classList.add('bg-blue-600');
+            setTimeout(() => {
+                saveButton.classList.remove('bg-blue-600');
+            }, 500);
+
+        } catch (error) {
+            console.error('Failed to save logs to API:', error);
+        }
+    });
+
+    // Start/Stop Button
+    let isRunning = false;
+    startButton.addEventListener('click', () => {
+        if (!currentSessionId) {
+            // [変更] alertを英語に変更
+            alert('Session not initialized. Please reload the page.');
+            return;
+        }
+        isRunning = !isRunning;
+        if (isRunning) {
+            playIcon.classList.add('hidden');
+            pauseIcon.classList.remove('hidden');
+            // [変更] titleを英語に変更
+            startButton.title = "Stop Detection";
+            console.log('Detection started (RestAPI simulation).');
+            restApiInterval = setInterval(fetchRestApiData, 2500);
+        } else {
+            stopSimulation();
+        }
+    });
+
+    // (Click outside menu unchanged)
+    document.addEventListener('click', (e) => {
+        if (!roleMenuButton.contains(e.target)) {
+            roleMenu.classList.add('hidden');
+        }
+    });
+
+    // Summary Button Event Listener (API)
+    summaryButton.addEventListener('click', async () => {
+        try {
+            // 1. Get role info from API
+            const roleData = await apiFetch('/api/settings/currentRole');
+            let role = 'N/A';
+            if (roleData && roleData.value) {
+                if (typeof roleData.value === 'object' && roleData.value !== null && 'value' in roleData.value) {
+                    role = roleData.value.value;
+                } else if (typeof roleData.value === 'string') {
+                    role = roleData.value;
+                }
+            }
+
+            // 2. Get summary info from API
+            const summaryData = await apiFetch('/api/summaries/projectReview');
+            // [変更] フォールバックを英語に変更
+            const content = (summaryData && summaryData.html) ? summaryData.html : '<p>Summary not found.</p>';
+
+            // 3. Reflect in UI
+            summaryRole.textContent = role;
+            summaryContentContainer.innerHTML = content;
+
+            // 4. Show summary
+            summaryModal.classList.remove('hidden');
+
+        } catch (error) {
+            console.error("Failed to get data for summary:", error);
+            // [変更] エラーメッセージを英語に変更
+            summaryRole.textContent = "Error";
+            summaryContentContainer.innerHTML = "<p>Failed to load data.</p>";
+            summaryModal.classList.remove('hidden');
+        }
+    });
+
+    // (Summary close button unchanged)
+    summaryCloseButton.addEventListener('click', () => {
+        summaryModal.classList.add('hidden');
+    });
+
+
+    // --- Start Application ---
+    document.addEventListener('DOMContentLoaded', initializeApp);
+
+</script>
+
+</body>
+</html>
