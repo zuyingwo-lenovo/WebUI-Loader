@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Windows;
 using Microsoft.Web.WebView2.Core;
@@ -10,6 +10,7 @@ namespace WebUI
     public partial class MainWindow : Window
     {
         private string _userDataFolder;
+        private bool _isPageAccessible = true;
 
         public MainWindow()
         {
@@ -36,79 +37,162 @@ namespace WebUI
 
                 await myWebView.EnsureCoreWebView2Async(environment);
 
-                // --- PART 2: LOAD CUSTOM CONFIG FILE (This is the new part) ---
+                // --- PART 2: LOAD OR INIT CONFIGURATION ---
+                
+                myWebView.WebMessageReceived += WebView_WebMessageReceived;
+                myWebView.CoreWebView2.NavigationCompleted += CoreWebView2_NavigationCompleted;
 
-                // 1. Define the path to your custom config file
-                string configFilePath = Path.Combine(exeDirectory, $"{appName}.exe.config");
+                string settingsFilePath = Path.Combine(exeDirectory, "settings.json");
 
-                if (!File.Exists(configFilePath))
+                if (File.Exists(settingsFilePath))
                 {
-                    MessageBox.Show("Error: 'settings.config' not found.", "Configuration Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
+                    string json = File.ReadAllText(settingsFilePath);
+                    string dashboardUrl = ParseDashboardUrl(json);
 
-                // 2. Map this file as the configuration
-                ExeConfigurationFileMap fileMap = new ExeConfigurationFileMap();
-                fileMap.ExeConfigFilename = configFilePath;
-
-                // 3. Open the mapped file
-                Configuration config = ConfigurationManager.OpenMappedExeConfiguration(fileMap, ConfigurationUserLevel.None);
-
-                // 4. Read the setting from the file
-                string dashboardUrl = config.AppSettings.Settings["DashboardUrl"]?.Value;
-
-                // --- END OF NEW PART ---
-
-                if (string.IsNullOrEmpty(dashboardUrl))
-                {
-                    MessageBox.Show("Error: 'DashboardUrl' not found in settings.config.", "Configuration Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-
-                Uri dashboardUri;
-                try
-                {
-                    // 2. Try to parse the string as a URI (path)
-                    dashboardUri = new Uri(dashboardUrl);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error: 'DashboardUrl' is not a valid path.\n\nError: {ex.Message}",
-                                    "Invalid Path",
-                                    MessageBoxButton.OK,
-                                    MessageBoxImage.Error);
-                    return;
-                }
-
-                // 3. Check if it's a local file path (not http://, etc.)
-                if (dashboardUri.IsFile)
-                {
-                    // 4. Check if the local file actually exists on disk
-                    //    We use .LocalPath to get the clean file path (e.g., "C:\my file.html")
-                    if (!File.Exists(dashboardUri.LocalPath))
+                    if (!string.IsNullOrEmpty(dashboardUrl))
                     {
-                        //MessageBox.Show($"Error: The file specified in 'DashboardUrl' was not found.\n\nPath: {dashboardUri.LocalPath}",
-                        //                "File Not Found",
-                        //                MessageBoxButton.OK,
-                        //                MessageBoxImage.Error);
-                        //Override with the default index.html
-                        dashboardUri = new Uri("index.html");
+                        NavigateToDashboard(dashboardUrl);
+                    }
+                    else
+                    {
+                        NavigateToSetup();
                     }
                 }
-
-                // --- END OF NEW VALIDATION BLOCK ---
-
-                // Use the variable to navigate
-                myWebView.CoreWebView2.Navigate(dashboardUri.AbsoluteUri);
+                else
+                {
+                    NavigateToSetup();
+                }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error initializing WebView2: {ex.Message}", "WebView2 Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
+        private string ParseDashboardUrl(string json)
+        {
+            try
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(json, @"""DashboardUrl""\s*:\s*""([^""]+)""");
+                if (match.Success)
+                {
+                    return match.Groups[1].Value;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to parse settings.json: {ex.Message}");
+            }
+            return null;
+        }
+
+        private void NavigateToSetup()
+        {
+            string exeDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            string setupPath = Path.Combine(exeDirectory, "setup.html");
+            if (File.Exists(setupPath))
+            {
+                myWebView.CoreWebView2.Navigate(new Uri(setupPath).AbsoluteUri);
+            }
+            else
+            {
+                MessageBox.Show("Error: 'setup.html' was not found in the application directory.", "Setup Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void NavigateToDashboard(string dashboardUrl)
+        {
+            string exeDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            Uri dashboardUri;
+
+            try
+            {
+                if (Uri.TryCreate(dashboardUrl, UriKind.Absolute, out dashboardUri))
+                {
+                    // Valid absolute URI
+                }
+                else
+                {
+                    // Relative path
+                    string fullPath = Path.Combine(exeDirectory, dashboardUrl);
+                    dashboardUri = new Uri(fullPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error: '{dashboardUrl}' is not a valid path or URL.\n\nError: {ex.Message}",
+                                "Invalid Path",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Error);
+                NavigateToSetup();
+                return;
+            }
+
+            if (dashboardUri.IsFile && !File.Exists(dashboardUri.LocalPath))
+            {
+                MessageBox.Show($"Error: The file specified in settings.json was not found.\n\nPath: {dashboardUri.LocalPath}",
+                                "File Not Found",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Error);
+                NavigateToSetup();
+                return;
+            }
+
+            myWebView.CoreWebView2.Navigate(dashboardUri.AbsoluteUri);
+        }
+
+        private void WebView_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            try
+            {
+                string messageJson = e.TryGetWebMessageAsString();
+
+                var actionMatch = System.Text.RegularExpressions.Regex.Match(messageJson, @"""action""\s*:\s*""([^""]+)""");
+                var urlMatch = System.Text.RegularExpressions.Regex.Match(messageJson, @"""dashboardUrl""\s*:\s*""([^""]+)""");
+
+                if (actionMatch.Success && actionMatch.Groups[1].Value == "saveSettings" && urlMatch.Success)
+                {
+                    string dashboardUrl = urlMatch.Groups[1].Value;
+
+                    string exeDirectory = AppDomain.CurrentDomain.BaseDirectory;
+                    string settingsFilePath = Path.Combine(exeDirectory, "settings.json");
+
+                    string escapedUrl = dashboardUrl.Replace("\\", "\\\\").Replace("\"", "\\\"");
+                    string jsonContent = $"{{\r\n  \"DashboardUrl\": \"{escapedUrl}\"\r\n}}";
+
+                    File.WriteAllText(settingsFilePath, jsonContent);
+
+                    NavigateToDashboard(dashboardUrl);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to save settings: {ex.Message}", "Save Settings Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
         private void MainWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
             myWebView?.Dispose();
+
+            // If the target page was not accessible when closing, delete settings.json
+            // so that the next run falls back to setup.html.
+            if (!_isPageAccessible)
+            {
+                try
+                {
+                    string exeDirectory = AppDomain.CurrentDomain.BaseDirectory;
+                    string settingsFilePath = Path.Combine(exeDirectory, "settings.json");
+                    if (File.Exists(settingsFilePath))
+                    {
+                        File.Delete(settingsFilePath);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to delete settings.json on closing: {ex.Message}");
+                }
+            }
+
             try
             {
                 if (!string.IsNullOrEmpty(_userDataFolder) && Directory.Exists(_userDataFolder))
@@ -119,6 +203,36 @@ namespace WebUI
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Could not delete user data folder: {ex.Message}");
+            }
+        }
+
+        private void CoreWebView2_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            try
+            {
+                string currentUri = myWebView.CoreWebView2.Source;
+                string exeDirectory = AppDomain.CurrentDomain.BaseDirectory;
+                string setupUri = new Uri(Path.Combine(exeDirectory, "setup.html")).AbsoluteUri;
+
+                // Do not count the setup page itself as an accessibility failure
+                if (currentUri.Equals(setupUri, StringComparison.OrdinalIgnoreCase))
+                {
+                    _isPageAccessible = true;
+                    return;
+                }
+
+                if (!e.IsSuccess)
+                {
+                    _isPageAccessible = false;
+                }
+                else
+                {
+                    _isPageAccessible = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in NavigationCompleted: {ex.Message}");
             }
         }
         // Add this method inside your MainWindow class in MainWindow.xaml.cs
@@ -132,6 +246,20 @@ namespace WebUI
             if (e.ChangedButton == MouseButton.Left)
             {
                 this.DragMove();
+            }
+        }
+        private void Window_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == MouseButton.Left)
+            {
+                if (this.WindowState == WindowState.Maximized)
+                {
+                    this.WindowState = WindowState.Normal;
+                }
+                else
+                {
+                    this.WindowState = WindowState.Maximized;
+                }
             }
         }
     }

@@ -81,7 +81,7 @@ xcopy /Y bin\Release\*.config dist\ >nul
 xcopy /Y bin\Release\*.dll dist\ >nul
 xcopy /Y bin\Release\*.manifest dist\ >nul
 xcopy /Y bin\Release\*.application dist\ >nul
-xcopy /Y bin\Release\index.html dist\ >nul
+xcopy /Y bin\Release\*.html dist\ >nul
 
 :: Copy WebView2 native runtimes (essential for runtime load of WebView2Loader.dll)
 if exist bin\Release\runtimes (

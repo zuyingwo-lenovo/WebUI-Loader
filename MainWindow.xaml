@@ -1,4 +1,4 @@
-﻿<Window x:Class="WebUI.MainWindow"
+<Window x:Class="WebUI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -11,7 +11,8 @@
         WindowStyle="None"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
-        ShowInTaskbar="False">
+        ShowInTaskbar="False"
+        MouseDoubleClick="Window_MouseDoubleClick">
 
     <Grid>
         <Grid.ColumnDefinitions>
